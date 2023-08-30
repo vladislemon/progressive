@@ -11,7 +11,9 @@ void thread_join(Thread thread, usize *result_holder) {
     WaitForSingleObject(thread, INFINITE);
     DWORD exit_code;
     GetExitCodeThread(thread, &exit_code);
-    *((DWORD *) result_holder) = exit_code;
+    if (result_holder != 0) {
+        *result_holder = exit_code;
+    }
 }
 
 void thread_exit(usize result) {
