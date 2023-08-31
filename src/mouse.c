@@ -11,7 +11,6 @@ void mouse_on_cursor_pos(GLFWwindow *window, double x, double y) {
     cursorX = x;
     cursorY = y;
     GlobalState *state = glfwGetWindowUserPointer(window);
-    state->cursorPosInitialized = true;
     for (int i = 0; i < LISTENER_MAX_COUNT; i++) {
         if (cursorPosListeners[i] != 0) {
             cursorPosListeners[i](state, x, y);

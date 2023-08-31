@@ -1,6 +1,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "camera.h"
 #include "global_state.h"
@@ -8,6 +9,7 @@
 #include "mesh.h"
 #include "mesh_builder.h"
 #include "mouse.h"
+#include "player.h"
 #include "shader_program.h"
 #include "texture.h"
 #include "thread.h"
@@ -30,60 +32,12 @@ static void updateViewportAndProjection(GlobalState *state, mat4 *projection) {
     }
 }
 
-static void updateCamera(GlobalState *state) {
-    static bool first = true;
-    static bool cursorFirst = true;
-    static double prevTime;
-    static double prevCursorX, prevCursorY;
-    double cursorX = mouse_get_cursor_x();
-    double cursorY = mouse_get_cursor_y();
-    if (first) {
-        prevTime = glfwGetTime();
-        first = false;
-    }
-    if (cursorFirst) {
-        if (state->cursorPosInitialized) {
-            prevCursorX = cursorX;
-            prevCursorY = cursorY;
-            cursorFirst = false;
-        }
-    }
-    double moveSpeed = 5;
-    double rotateSpeed = 0.001;
-    double time = glfwGetTime();
-    double deltaTime = time - prevTime;
-    if (!cursorFirst) {
-        double deltaX = cursorX - prevCursorX;
-        double deltaY = cursorY - prevCursorY;
-        float rotatePitch = (float) (-deltaY * rotateSpeed);
-        float rotateYaw = (float) (-deltaX * rotateSpeed);
-        camera_rotate(&state->camera, rotatePitch, rotateYaw);
-        prevCursorX = cursorX;
-        prevCursorY = cursorY;
-    }
-    float move = (float) (moveSpeed * deltaTime);
-    if (keyboard_is_key_pressed(GLFW_KEY_LEFT_CONTROL)) {
-        move *= 4;
-    }
-    if (keyboard_is_key_pressed(GLFW_KEY_W)) {
-        camera_move_forward(&state->camera, move);
-    }
-    if (keyboard_is_key_pressed(GLFW_KEY_S)) {
-        camera_move_backward(&state->camera, move);
-    }
-    if (keyboard_is_key_pressed(GLFW_KEY_A)) {
-        camera_move_left(&state->camera, move);
-    }
-    if (keyboard_is_key_pressed(GLFW_KEY_D)) {
-        camera_move_right(&state->camera, move);
-    }
-    if (keyboard_is_key_pressed(GLFW_KEY_SPACE)) {
-        camera_move_up(&state->camera, move);
-    }
-    if (keyboard_is_key_pressed(GLFW_KEY_LEFT_SHIFT)) {
-        camera_move_down(&state->camera, move);
-    }
-    prevTime = time;
+static void rebuildMesh(GlobalState *state) {
+    float *vertices;
+    usize meshSize;
+    mesh_builder_build(state->world, &vertices, &meshSize);
+    mesh_update(&state->mesh, (isize) meshSize, vertices);
+    free(vertices);
 }
 
 static void *renderThreadFunc(void *arg) {
@@ -107,8 +61,11 @@ static void *renderThreadFunc(void *arg) {
     mat4 mvp;
     while (!state->renderThreadShouldStop) {
         updateViewportAndProjection(state, &projection);
-        updateCamera(state);
-        camera_get_view(&state->camera, &view);
+        player_update(&state->player);
+        if (world_is_updated(state->world, true)) {
+            rebuildMesh(state);
+        }
+        camera_get_view(&state->player.camera, &view);
         glm_mul(projection, view, mvp);
         glm_mul(mvp, model, mvp);
         glUniformMatrix4fv(0, 1, false, (const GLfloat *) mvp);
@@ -123,8 +80,8 @@ static void *renderThreadFunc(void *arg) {
 static void updateTitle(GlobalState *state) {
     char title[128];
     sprintf(title, "%s | x=%f | y=%f | z=%f | pitch=%f PI | yaw=%f PI", PROJECT_NAME_STRING,
-            state->camera.position[0], state->camera.position[1], state->camera.position[2],
-            state->camera.pitch / GLM_PIf, state->camera.yaw / GLM_PIf);
+            state->player.position[0], state->player.position[1], state->player.position[2],
+            state->player.pitch / GLM_PIf, state->player.yaw / GLM_PIf);
     glfwSetWindowTitle(state->window, title);
 }
 
@@ -146,11 +103,9 @@ int main() {
     GlobalState state = {};
     state.framebufferWidth = INITIAL_WINDOW_WIDTH;
     state.framebufferHeight = INITIAL_WINDOW_HEIGHT;
-    state.camera = camera_create();
-    camera_set_position(&state.camera, 0, 0, -2);
-    camera_set_rotation(&state.camera, 0, 0);
     state.world = world_create();
     world_setBlock(state.world, 0, 0, 0, 1);
+    state.player = player_create();
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
@@ -173,10 +128,7 @@ int main() {
 
     //dev
     state.mesh = mesh_create();
-    float *vertices;
-    usize meshSize;
-    mesh_builder_build(state.world, &vertices, &meshSize);
-    mesh_update(&state.mesh, (isize) meshSize, vertices);
+    rebuildMesh(&state);
     Texture texture = texture_create("../textures/uvtemplate.png");
     texture_bind(&texture);
     ShaderProgram shaderProgram = shader_program_create("../shaders/shader.vert", "../shaders/shader.frag");

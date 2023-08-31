@@ -14,7 +14,7 @@ Mesh mesh_create() {
 
 static void update_data(u32 vbo, isize size, float *data) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, size, data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, size, data, GL_DYNAMIC_DRAW);
 }
 
 void mesh_update(Mesh *mesh, isize size, float *vertices) {

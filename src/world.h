@@ -17,4 +17,6 @@ void world_fillRegion(World world, i32 minX, i32 minY, i32 minZ, i32 maxX, i32 m
 
 void world_iterate(World world, void (*f)(World world, i32 x, i32 y, i32 z, u8 block, void *custom), void *custom);
 
+bool world_is_updated(World world, bool clear);
+
 #endif //PROGRESSIVE_WORLD_H

@@ -5,6 +5,7 @@
 
 #include "camera.h"
 #include "mesh.h"
+#include "player.h"
 #include "types.h"
 #include "world.h"
 
@@ -14,10 +15,9 @@ typedef struct GlobalState_s {
     int framebufferHeight;
     bool renderThreadShouldStop;
     bool renderThreadStopped;
-    bool cursorPosInitialized;
-    Camera camera;
     World world;
     Mesh mesh;
+    Player player;
 } GlobalState;
 
 #endif //PROGRESSIVE_GLOBAL_STATE_H
