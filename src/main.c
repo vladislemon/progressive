@@ -3,8 +3,11 @@
 #include <stdio.h>
 
 #include "camera.h"
+#include "global_state.h"
+#include "keyboard.h"
 #include "mesh.h"
 #include "mesh_builder.h"
+#include "mouse.h"
 #include "shader_program.h"
 #include "texture.h"
 #include "thread.h"
@@ -14,21 +17,6 @@
 #define INITIAL_WINDOW_WIDTH 800
 #define INITIAL_WINDOW_HEIGHT 600
 #define LIMIT_FRAMERATE
-
-typedef struct GlobalState_s {
-    GLFWwindow *window;
-    int framebufferWidth;
-    int framebufferHeight;
-    bool renderThreadShouldStop;
-    bool renderThreadStopped;
-    bool keys[GLFW_KEY_LAST];
-    double cursorX;
-    double cursorY;
-    bool cursorPosInitialized;
-    Camera camera;
-    World world;
-    Mesh mesh;
-} GlobalState;
 
 static void updateViewportAndProjection(GlobalState *state, mat4 *projection) {
     static int prevWidth;
@@ -47,14 +35,16 @@ static void updateCamera(GlobalState *state) {
     static bool cursorFirst = true;
     static double prevTime;
     static double prevCursorX, prevCursorY;
+    double cursorX = mouse_get_cursor_x();
+    double cursorY = mouse_get_cursor_y();
     if (first) {
         prevTime = glfwGetTime();
         first = false;
     }
     if (cursorFirst) {
         if (state->cursorPosInitialized) {
-            prevCursorX = state->cursorX;
-            prevCursorY = state->cursorY;
+            prevCursorX = cursorX;
+            prevCursorY = cursorY;
             cursorFirst = false;
         }
     }
@@ -63,34 +53,34 @@ static void updateCamera(GlobalState *state) {
     double time = glfwGetTime();
     double deltaTime = time - prevTime;
     if (!cursorFirst) {
-        double deltaX = state->cursorX - prevCursorX;
-        double deltaY = state->cursorY - prevCursorY;
+        double deltaX = cursorX - prevCursorX;
+        double deltaY = cursorY - prevCursorY;
         float rotatePitch = (float) (-deltaY * rotateSpeed);
         float rotateYaw = (float) (-deltaX * rotateSpeed);
         camera_rotate(&state->camera, rotatePitch, rotateYaw);
-        prevCursorX = state->cursorX;
-        prevCursorY = state->cursorY;
+        prevCursorX = cursorX;
+        prevCursorY = cursorY;
     }
     float move = (float) (moveSpeed * deltaTime);
-    if (state->keys[GLFW_KEY_LEFT_CONTROL]) {
+    if (keyboard_is_key_pressed(GLFW_KEY_LEFT_CONTROL)) {
         move *= 4;
     }
-    if (state->keys[GLFW_KEY_W]) {
+    if (keyboard_is_key_pressed(GLFW_KEY_W)) {
         camera_move_forward(&state->camera, move);
     }
-    if (state->keys[GLFW_KEY_S]) {
+    if (keyboard_is_key_pressed(GLFW_KEY_S)) {
         camera_move_backward(&state->camera, move);
     }
-    if (state->keys[GLFW_KEY_A]) {
+    if (keyboard_is_key_pressed(GLFW_KEY_A)) {
         camera_move_left(&state->camera, move);
     }
-    if (state->keys[GLFW_KEY_D]) {
+    if (keyboard_is_key_pressed(GLFW_KEY_D)) {
         camera_move_right(&state->camera, move);
     }
-    if (state->keys[GLFW_KEY_SPACE]) {
+    if (keyboard_is_key_pressed(GLFW_KEY_SPACE)) {
         camera_move_up(&state->camera, move);
     }
-    if (state->keys[GLFW_KEY_LEFT_SHIFT]) {
+    if (keyboard_is_key_pressed(GLFW_KEY_LEFT_SHIFT)) {
         camera_move_down(&state->camera, move);
     }
     prevTime = time;
@@ -138,28 +128,18 @@ static void updateTitle(GlobalState *state) {
     glfwSetWindowTitle(state->window, title);
 }
 
+static void updateTitleOnKey(GlobalState *state, int key, int scancode, int action, int mods) {
+    updateTitle(state);
+}
+
+static void updateTitleOnCursor(GlobalState *state, double x, double y) {
+    updateTitle(state);
+}
+
 static void onFramebufferSize(GLFWwindow *window, int width, int height) {
     GlobalState *state = glfwGetWindowUserPointer(window);
     state->framebufferWidth = width;
     state->framebufferHeight = height;
-}
-
-static void onKey(GLFWwindow *window, int key, int scancode, int action, int mods) {
-    GlobalState *state = glfwGetWindowUserPointer(window);
-    if (action == GLFW_PRESS) {
-        state->keys[key] = true;
-    } else if (action == GLFW_RELEASE) {
-        state->keys[key] = false;
-    }
-    updateTitle(state);
-}
-
-static void onCursorPos(GLFWwindow *window, double x, double y) {
-    GlobalState *state = glfwGetWindowUserPointer(window);
-    state->cursorX = x;
-    state->cursorY = y;
-    state->cursorPosInitialized = true;
-    updateTitle(state);
 }
 
 int main() {
@@ -183,8 +163,11 @@ int main() {
     }
     glfwSetWindowUserPointer(state.window, &state);
     glfwSetFramebufferSizeCallback(state.window, onFramebufferSize);
-    glfwSetKeyCallback(state.window, onKey);
-    glfwSetCursorPosCallback(state.window, onCursorPos);
+    glfwSetKeyCallback(state.window, keyboard_on_key);
+    keyboard_add_key_listener(updateTitleOnKey);
+    glfwSetCursorPosCallback(state.window, mouse_on_cursor_pos);
+    mouse_add_cursor_pos_listener(updateTitleOnCursor);
+    glfwSetMouseButtonCallback(state.window, mouse_on_button);
     glfwMakeContextCurrent(state.window);
     gladLoadGL(glfwGetProcAddress);
 
